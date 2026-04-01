@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Product Search</title>
+    <style>
+      body{font-family: Arial, sans-serif;margin:20px}
+      .search-box{max-width:700px;margin-bottom:20px}
+      .product{display:flex;gap:16px;padding:12px;border:1px solid #eee;margin-bottom:12px;border-radius:6px}
+      .product img{width:120px;height:120px;object-fit:cover}
+      .product .meta{flex:1}
+      .price{font-weight:700;color:#0a7}
+      .buy-btn{display:inline-block;padding:8px 12px;background:#0a74ff;color:#fff;text-decoration:none;border-radius:6px}
+      .source-badge{display:inline-block;padding:2px 8px;background:#f0f0f0;border-radius:4px;font-size:12px;color:#555;margin-bottom:6px}
+    </style>
+  </head>
+  <body>
+    <h1>Find the Cheapest Product</h1>
+    <form method="get" action="" class="search-box">
+      <input type="text" name="q" value="{{ query }}" placeholder="Search products..." style="width:70%;padding:8px" />
+      <button type="submit" style="padding:8px 12px">Search</button>
+    </form>
+
+    {% if query and not results %}
+      <p>No results for "{{ query }}".</p>
+    {% endif %}
+
+    {% for p in results %}
+      <div class="product">
+        <div class="thumb">
+          {% if p.image %}
+            <img src="{{ p.image }}" alt="{{ p.title }}">
+          {% else %}
+            <div style="width:120px;height:120px;background:#f4f4f4;display:flex;align-items:center;justify-content:center">No image</div>
+          {% endif %}
+        </div>
+        <div class="meta">
+          <span class="source-badge">{{ p.source }}</span>
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <h3 style="margin:0">{{ p.title }}</h3>
+            <div class="price">£{{ p.price }}</div>
+          </div>
+          <p style="margin:8px 0">{{ p.description }}</p>
+          <a class="buy-btn" href="{{ p.url }}" target="_blank" rel="noopener">Buy on {{ p.source }}</a>
+        </div>
+      </div>
+    {% endfor %}
+  </body>
+</html>
