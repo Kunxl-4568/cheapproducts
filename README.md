@@ -1,10 +1,26 @@
-Quick start
+# CheapProducts
 
-1. Create a virtualenv and install dependencies:
+A Django-powered price comparison tool that scrapes multiple UK e-commerce websites in parallel and shows the cheapest products for any search query.
+
+## Supported Sites
+
+| Site | Status | Notes |
+|------|--------|-------|
+| Amazon UK | Working | Scrapes search results via requests + BeautifulSoup |
+| eBay UK | Working | Scrapes search results via requests + BeautifulSoup |
+| Etsy UK | Limited | Etsy blocks plain requests (403). Works better with proxies or the Etsy Open API |
+| TikTok Shop | Limited | JS-rendered – returns empty with plain requests |
+| Facebook Marketplace | Limited | Requires login/auth – returns empty with plain requests |
+| Wix eCommerce | Configurable | Needs a specific Wix store URL to be set |
+| BigCommerce | Configurable | Needs a specific BigCommerce store URL to be set |
+
+## Quick Start
+
+1. Clone the repo and install dependencies:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
+git clone https://github.com/YOUR_USERNAME/cheapproducts.git
+cd cheapproducts
 pip install -r requirements.txt
 ```
 
@@ -15,33 +31,71 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-3. Open http://127.0.0.1:8000/search/ and try a query (example: "shirt", "bag").
+3. Open http://127.0.0.1:8000/search/ and search for anything (e.g. "toys", "headphones", "shirt").
 
-Notes
+## How It Works
 
-- This project includes a simple demo scraper that uses the public FakeStore API and returns cheapest matching items.
-- For production or real e-commerce sites, implement site-specific scrapers in `main/scrapers.py`. Selenium-based scrapers are hinted at but require driver setup.
- - For production or real e-commerce sites, implement site-specific scrapers in `main/scrapers.py`.
- - The project now includes Selenium-capable multi-site scrapers. To use Selenium (recommended for real sites), install drivers and run with the instructions below.
-
-Selenium setup (Windows / Chrome)
-
-1. Install dependencies (in virtualenv):
-
-```bash
-pip install -r requirements.txt
+```
+User searches "toys"
+        ↓
+    views.py → scrapers.py (bridge) → main.py (orchestrator)
+                                          ↓
+                              ThreadPoolExecutor (7 workers)
+                              ┌─────────┬─────────┬─────────┐
+                              ↓         ↓         ↓         ↓
+                          Amazon UK  eBay UK  Etsy UK  ... (all sites)
+                              ↓         ↓         ↓
+                           base.py → fetcher.py → parser.py
+                                          ↓
+                                  selectors.py (CSS config)
+                                          ↓
+                                Results merged & sorted by price
 ```
 
-2. Run the dev server (ChromeDriver will be downloaded automatically by webdriver-manager when first used):
+- **fetcher.py** – HTTP layer with User-Agent rotation, retry with backoff, and per-domain rate limiting.
+- **parser.py** – BeautifulSoup helpers for extracting text, attributes, and prices.
+- **selectors.py** – Centralised CSS selectors for all sites. Update selectors here when a site changes its layout.
+- **base.py** – Abstract base class. Every scraper implements `build_search_url()` and `parse_products()`.
+- **main.py** – Orchestrator that runs all scrapers in parallel using `ThreadPoolExecutor`.
+- **storage.py** – Optional helper to save scraped results into the Django database.
 
-```bash
-python manage.py runserver
+## Adding a New Site
+
+1. Add CSS selectors to `main/scraper/selectors.py`.
+2. Create a new scraper file in `main/scraper/sites/` inheriting from `BaseScraper`.
+3. Register it in the `SCRAPERS` list in `main/scraper/main.py`.
+
+## Project Structure
+
+```
+cheapproducts/          # Django project settings
+main/
+├── models.py           # Product model
+├── views.py            # Search view
+├── scrapers.py         # Bridge module (imported by views)
+├── scraper/
+│   ├── base.py         # Abstract base scraper class
+│   ├── fetcher.py      # HTTP client with retries & rate limiting
+│   ├── parser.py       # BeautifulSoup parsing helpers
+│   ├── selectors.py    # CSS selectors for all sites
+│   ├── main.py         # Parallel orchestrator
+│   ├── storage.py      # DB persistence (optional)
+│   └── sites/          # One file per site
+│       ├── amazon_uk.py
+│       ├── ebay_uk.py
+│       ├── etsy_uk.py
+│       ├── tiktok_shop.py
+│       ├── facebook_marketplace.py
+│       ├── wix.py
+│       └── bigcommerce.py
+└── templates/
+    └── main/
+        └── search.html # Search UI
 ```
 
-3. Use the search UI at `http://127.0.0.1:8000/search/?q=your+query`.
+## Notes & Caveats
 
-Notes and caveats
-
-- The built-in Selenium scrapers target eBay, BestBuy, and Walmart with heuristic selectors. Selectors may need updates per region/site UI changes.
-- Sites may block automated access; respect robots.txt and site terms. For reliable production scraping, consider using official APIs or partner programs.
-- If Selenium or a driver isn't available, the app falls back to a demo FakeStore API so the UI remains functional.
+- This uses **requests + BeautifulSoup** (no Selenium needed).
+- Sites may change their HTML structure at any time – update CSS selectors in `selectors.py` if parsing breaks.
+- Some sites (TikTok Shop, Facebook Marketplace) are heavily JS-rendered and return limited data with plain HTTP requests. For full coverage, consider their official APIs.
+- Respect each site's `robots.txt` and terms of service. For production use, consider official APIs or affiliate/partner programs.
